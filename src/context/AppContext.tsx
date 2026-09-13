@@ -1,0 +1,342 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  Usuario,
+  Concurso,
+  TipoReductora,
+  QuinielaGenerada,
+  Suscripcion,
+  CodigoPromocional,
+  Outcome,
+} from '../types';
+import { SupabaseService, isSupabaseConfigured, supabase, isAdminEmail } from '../lib/supabase';
+import { generarReductora7Dobles, generarReductora3D3T } from '../lib/reducerMatrices';
+
+export type AppView = 'home' | 'reductora' | 'dashboard' | 'admin' | 'sql-schema';
+
+interface Toast {
+  id: string;
+  tipo: 'success' | 'error' | 'info';
+  mensaje: string;
+}
+
+interface AppContextType {
+  currentUser: Usuario | null;
+  currentView: AppView;
+  setCurrentView: (view: AppView) => void;
+  concurso: Concurso;
+  selectedReductora: TipoReductora;
+  authModalOpen: boolean;
+  setAuthModalOpen: (open: boolean) => void;
+  paywallModalOpen: boolean;
+  setPaywallModalOpen: (open: boolean) => void;
+  ultimaQuiniela: QuinielaGenerada | null;
+  historialQuinielas: QuinielaGenerada[];
+  suscripciones: Suscripcion[];
+  codigos: CodigoPromocional[];
+  tieneSuscripcionActiva: boolean;
+  tieneAccesoConcursoActual: boolean;
+  toast: Toast | null;
+  mostrarToast: (mensaje: string, tipo?: 'success' | 'error' | 'info') => void;
+  iniciarLoginGoogle: () => Promise<void>;
+  mockLogin: (tipo: 'user' | 'admin' | 'guest') => void;
+  cerrarSesion: () => void;
+  abrirReductora: (tipo: TipoReductora) => void;
+  generarQuiniela: (pronosticos: Record<number, Outcome[]>) => boolean;
+  canjearCodigoPromocional: (codigo: string) => { exito: boolean; mensaje: string };
+  actualizarConcurso: (nuevoConcurso: Concurso) => void;
+  aprobarSuscripcionUsuario: (usuarioId: string, email: string, nombre: string) => void;
+  crearNuevoCodigo: (codigo: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>) => void;
+  alternarEstadoCodigo: (id: string) => void;
+  eliminarCodigo: (id: string) => void;
+  recargarHistorial: () => void;
+  actualizarQuinielaGenerada: (quiniela: QuinielaGenerada) => void;
+  actualizarResultadoPartido: (partidoNumero: number, resultado: Outcome | null) => void;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(() => SupabaseService.getCurrentUser());
+  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [selectedReductora, setSelectedReductora] = useState<TipoReductora>('7D');
+  const [concurso, setConcurso] = useState<Concurso>(() => SupabaseService.getConcursoActivo());
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [paywallModalOpen, setPaywallModalOpen] = useState<boolean>(false);
+  const [ultimaQuiniela, setUltimaQuiniela] = useState<QuinielaGenerada | null>(null);
+  const [historialQuinielas, setHistorialQuinielas] = useState<QuinielaGenerada[]>([]);
+  const [suscripciones, setSuscripciones] = useState<Suscripcion[]>(() => SupabaseService.getSuscripciones());
+  const [codigos, setCodigos] = useState<CodigoPromocional[]>(() => SupabaseService.getCodigos());
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const mostrarToast = useCallback((mensaje: string, tipo: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString();
+    setToast({ id, tipo, mensaje });
+    setTimeout(() => {
+      setToast((curr) => (curr?.id === id ? null : curr));
+    }, 4000);
+  }, []);
+
+  // Listen to Supabase auth events if connected
+  useEffect(() => {
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const userMeta = session.user.user_metadata || {};
+          const user: Usuario = {
+            id: session.user.id,
+            email: session.user.email || '',
+            nombre: userMeta.full_name || userMeta.name || session.user.email?.split('@')[0] || 'Usuario',
+            avatarUrl: userMeta.avatar_url || userMeta.picture,
+            rol: isAdminEmail(session.user.email) ? 'admin' : 'user',
+            fechaRegistro: session.user.created_at || new Date().toISOString(),
+          };
+          setCurrentUser(user);
+        }
+      });
+
+      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          const userMeta = session.user.user_metadata || {};
+          const user: Usuario = {
+            id: session.user.id,
+            email: session.user.email || '',
+            nombre: userMeta.full_name || userMeta.name || session.user.email?.split('@')[0] || 'Usuario',
+            avatarUrl: userMeta.avatar_url || userMeta.picture,
+            rol: isAdminEmail(session.user.email) ? 'admin' : 'user',
+            fechaRegistro: session.user.created_at || new Date().toISOString(),
+          };
+          setCurrentUser(user);
+        } else {
+          setCurrentUser(null);
+        }
+      });
+
+      return () => {
+        authListener.subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  const recargarHistorial = useCallback(() => {
+    if (currentUser) {
+      setHistorialQuinielas(SupabaseService.getHistorialQuinielas(currentUser.id));
+    } else {
+      setHistorialQuinielas([]);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    recargarHistorial();
+  }, [currentUser, recargarHistorial]);
+
+  const tieneSuscripcionActiva = currentUser
+    ? currentUser.rol === 'admin' || SupabaseService.verificarSuscripcionActiva(currentUser.id, currentUser.email)
+    : false;
+
+  const tieneAccesoConcursoActual = currentUser
+    ? currentUser.rol === 'admin' || tieneSuscripcionActiva || SupabaseService.tieneAccesoPorCodigo(currentUser.id, concurso.numeroConcurso)
+    : false;
+
+  const iniciarLoginGoogle = async () => {
+    if (isSupabaseConfigured) {
+      const { error } = await SupabaseService.signInWithGoogle();
+      if (error) {
+        mostrarToast(`Error de conexión con Google / Supabase: ${error}`, 'error');
+      }
+    } else {
+      // Prompt user or execute mock
+      mockLogin('user');
+      mostrarToast('Sesión iniciada con Google (Simulación Supabase activa)', 'success');
+      setAuthModalOpen(false);
+    }
+  };
+
+  const mockLogin = (tipo: 'user' | 'admin' | 'guest') => {
+    const user = SupabaseService.mockGoogleLogin(tipo);
+    setCurrentUser(user);
+    setAuthModalOpen(false);
+    recargarHistorial();
+    mostrarToast(`Bienvenido ${user.nombre}`, 'success');
+  };
+
+  const cerrarSesion = () => {
+    SupabaseService.logout();
+    setCurrentUser(null);
+    setCurrentView('home');
+    setUltimaQuiniela(null);
+    mostrarToast('Sesión cerrada correctamente', 'info');
+  };
+
+  const abrirReductora = (tipo: TipoReductora) => {
+    if (!currentUser) {
+      setSelectedReductora(tipo);
+      setAuthModalOpen(true);
+      return;
+    }
+    setSelectedReductora(tipo);
+    setCurrentView('reductora');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const canjearCodigoPromocional = (codigoStr: string): { exito: boolean; mensaje: string } => {
+    if (!currentUser) {
+      return { exito: false, mensaje: 'Debes iniciar sesión con Google para canjear un código.' };
+    }
+    const res = SupabaseService.validarCodigoConcurso(codigoStr, concurso.numeroConcurso, currentUser.id);
+    if (res.valid) {
+      setCodigos(SupabaseService.getCodigos());
+      mostrarToast(res.mensaje, 'success');
+      setPaywallModalOpen(false);
+      return { exito: true, mensaje: res.mensaje };
+    } else {
+      mostrarToast(res.mensaje, 'error');
+      return { exito: false, mensaje: res.mensaje };
+    }
+  };
+
+  const generarQuiniela = (pronosticos: Record<number, Outcome[]>): boolean => {
+    if (!currentUser) {
+      setAuthModalOpen(true);
+      return false;
+    }
+
+    // Check paywall
+    const tieneAcceso =
+      currentUser.rol === 'admin' ||
+      SupabaseService.verificarSuscripcionActiva(currentUser.id, currentUser.email) ||
+      SupabaseService.tieneAccesoPorCodigo(currentUser.id, concurso.numeroConcurso);
+
+    if (!tieneAcceso) {
+      setPaywallModalOpen(true);
+      return false;
+    }
+
+    // Process mathematical matrix
+    try {
+      let combinaciones;
+      if (selectedReductora === '7D') {
+        combinaciones = generarReductora7Dobles(pronosticos);
+      } else {
+        combinaciones = generarReductora3D3T(pronosticos);
+      }
+
+      const nuevaQuiniela: QuinielaGenerada = {
+        id: `qg-${Date.now()}`,
+        usuarioId: currentUser.id,
+        usuarioEmail: currentUser.email,
+        concursoNumero: concurso.numeroConcurso,
+        tipoReductora: selectedReductora,
+        fechaCreacion: new Date().toISOString(),
+        totalCombinaciones: combinaciones.length,
+        combinaciones,
+        basePronosticos: pronosticos,
+      };
+
+      SupabaseService.guardarQuinielaGenerada(nuevaQuiniela);
+      setUltimaQuiniela(nuevaQuiniela);
+      recargarHistorial();
+      mostrarToast(`¡Se generaron con éxito las ${combinaciones.length} quinielas reducidas!`, 'success');
+      return true;
+    } catch (err: unknown) {
+      mostrarToast((err as Error).message, 'error');
+      return false;
+    }
+  };
+
+  const actualizarConcurso = (nuevoConcurso: Concurso) => {
+    SupabaseService.guardarConcurso(nuevoConcurso);
+    setConcurso(nuevoConcurso);
+    mostrarToast(`Concurso No. ${nuevoConcurso.numeroConcurso} actualizado`, 'success');
+  };
+
+  const aprobarSuscripcionUsuario = (usuarioId: string, email: string, nombre: string) => {
+    SupabaseService.activarSuscripcion30Dias(usuarioId, email, nombre);
+    setSuscripciones(SupabaseService.getSuscripciones());
+    mostrarToast(`Suscripción de 30 días activada para ${email}`, 'success');
+  };
+
+  const crearNuevoCodigo = (codigoData: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>) => {
+    SupabaseService.crearCodigo(codigoData);
+    setCodigos(SupabaseService.getCodigos());
+    mostrarToast(`Código ${codigoData.codigo} creado para concurso ${codigoData.concursoNumero}`, 'success');
+  };
+
+  const alternarEstadoCodigo = (id: string) => {
+    const nuevoEstado = SupabaseService.alternarEstadoCodigo(id);
+    setCodigos(SupabaseService.getCodigos());
+    mostrarToast(`El código ahora está ${nuevoEstado ? 'Activo' : 'Desactivado'}`, 'info');
+  };
+
+  const eliminarCodigo = (id: string) => {
+    SupabaseService.eliminarCodigo(id);
+    setCodigos(SupabaseService.getCodigos());
+    mostrarToast('Código eliminado del sistema', 'info');
+  };
+
+  const actualizarResultadoPartido = (partidoNumero: number, resultado: Outcome | null) => {
+    const nuevosPartidos = concurso.partidos.map((p) =>
+      p.numero === partidoNumero ? { ...p, resultadoReal: resultado } : p
+    );
+    const nuevoConcurso = { ...concurso, partidos: nuevosPartidos };
+    SupabaseService.guardarConcurso(nuevoConcurso);
+    setConcurso(nuevoConcurso);
+  };
+
+  const actualizarQuinielaGenerada = (quinielaActualizada: QuinielaGenerada) => {
+    SupabaseService.actualizarQuinielaGenerada(quinielaActualizada);
+    setHistorialQuinielas((prev) =>
+      prev.map((q) => (q.id === quinielaActualizada.id ? quinielaActualizada : q))
+    );
+    if (ultimaQuiniela?.id === quinielaActualizada.id) {
+      setUltimaQuiniela(quinielaActualizada);
+    }
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        currentUser,
+        currentView,
+        setCurrentView,
+        concurso,
+        selectedReductora,
+        authModalOpen,
+        setAuthModalOpen,
+        paywallModalOpen,
+        setPaywallModalOpen,
+        ultimaQuiniela,
+        historialQuinielas,
+        suscripciones,
+        codigos,
+        tieneSuscripcionActiva,
+        tieneAccesoConcursoActual,
+        toast,
+        mostrarToast,
+        iniciarLoginGoogle,
+        mockLogin,
+        cerrarSesion,
+        abrirReductora,
+        generarQuiniela,
+        canjearCodigoPromocional,
+        actualizarConcurso,
+        aprobarSuscripcionUsuario,
+        crearNuevoCodigo,
+        alternarEstadoCodigo,
+        eliminarCodigo,
+        recargarHistorial,
+        actualizarQuinielaGenerada,
+        actualizarResultadoPartido,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
