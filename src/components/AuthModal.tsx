@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, Mail, ArrowRight, Key, AlertCircle, User } from 'lucide-react';
+import { X, ShieldCheck, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { isSupabaseConfigured, supabaseConfigError, isAdminEmail } from '../lib/supabase';
+import logoWinProgol from '../assets/images/regenerated_image_1789352960422.jpg';
 
 export const AuthModal: React.FC = () => {
-  const { authModalOpen, setAuthModalOpen, loginConCorreo, mockLogin } = useApp();
+  const { authModalOpen, setAuthModalOpen, loginConCorreo } = useApp();
   const [emailInput, setEmailInput] = useState('');
   const [nombreInput, setNombreInput] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -49,8 +50,13 @@ export const AuthModal: React.FC = () => {
 
         {/* Brand Icon & Heading */}
         <div className="text-center mb-6">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F172A] border border-[#334155]">
-            <span className="font-mono text-lg font-black text-[#10B981]">WP</span>
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0F172A] border border-[#334155] overflow-hidden shadow-md">
+            <img
+              src={logoWinProgol}
+              alt="WinProgol Logo"
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <h3 className="text-xl font-black text-[#F8FAFC]">Iniciar Sesión por Correo</h3>
           <p className="text-xs text-[#94A3B8] mt-1">

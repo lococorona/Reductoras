@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, User, LogOut, CheckCircle2, AlertCircle, Database, LayoutDashboard, Settings, Mail } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PWAInstallButton } from './PWAInstallButton';
+import logoWinProgol from '../assets/images/regenerated_image_1789352960422.jpg';
 
 export const Navbar: React.FC = () => {
   const {
@@ -22,8 +23,13 @@ export const Navbar: React.FC = () => {
           onClick={() => setCurrentView('home')}
           className="flex items-center gap-3 cursor-pointer group select-none"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#161F30] border border-[#334155] group-hover:border-[#10B981] transition">
-            <span className="font-mono text-sm font-black tracking-tighter text-[#10B981]">WP</span>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0F172A] border border-[#334155] group-hover:border-[#10B981] overflow-hidden transition shadow-xs shrink-0">
+            <img
+              src={logoWinProgol}
+              alt="WinProgol Logo"
+              className="h-full w-full object-cover group-hover:scale-105 transition"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -148,11 +154,12 @@ export const Navbar: React.FC = () => {
                 title="Ir a mi dashboard"
               >
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1E293B] border border-[#334155] overflow-hidden">
-                  {currentUser.avatarUrl ? (
-                    <img src={currentUser.avatarUrl} alt={currentUser.nombre} className="h-full w-full object-cover" />
-                  ) : (
-                    <User className="w-3.5 h-3.5 text-[#F8FAFC]" />
-                  )}
+                  <img
+                    src={currentUser.rol === 'admin' ? logoWinProgol : (currentUser.avatarUrl || logoWinProgol)}
+                    alt={currentUser.nombre}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
                 <span className="hidden lg:inline text-xs font-semibold text-[#F8FAFC] max-w-[120px] truncate">
                   {currentUser.nombre.split(' ')[0]}

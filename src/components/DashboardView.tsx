@@ -20,6 +20,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { QuinielaGenerada, Outcome, QuinielaFila } from '../types';
 import { generarReductora7Dobles, generarReductora3D3T } from '../lib/reducerMatrices';
+import adminAvatarImg from '../assets/images/regenerated_image_1789352960422.jpg';
 
 export const DashboardView: React.FC = () => {
   const {
@@ -239,11 +240,12 @@ export const DashboardView: React.FC = () => {
           {/* User info */}
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#0F172A] border border-[#334155] overflow-hidden text-white shrink-0">
-              {currentUser.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt={currentUser.nombre} className="h-full w-full object-cover" />
-              ) : (
-                <User className="w-8 h-8 text-[#10B981]" />
-              )}
+              <img
+                src={currentUser.rol === 'admin' ? adminAvatarImg : (currentUser.avatarUrl || adminAvatarImg)}
+                alt={currentUser.nombre}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">

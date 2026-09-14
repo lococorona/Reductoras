@@ -10,6 +10,7 @@ import { AuthModal } from './components/AuthModal';
 import { PaywallModal } from './components/PaywallModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { CheckCircle2, AlertTriangle, Info, ShieldCheck, Heart } from 'lucide-react';
+import logoWinProgol from './assets/images/regenerated_image_1789352960422.jpg';
 
 const MainContent: React.FC = () => {
   const { currentView, toast, setCurrentView, currentUser } = useApp();
@@ -50,8 +51,15 @@ const MainContent: React.FC = () => {
       {/* Footer */}
       <footer className="w-full border-t border-[#334155] bg-[#0F172A] py-8 text-xs text-[#94A3B8]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-black text-[#10B981]">WP</span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#161F30] border border-[#334155] overflow-hidden shrink-0">
+              <img
+                src={logoWinProgol}
+                alt="WinProgol"
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
             <span className="font-bold text-[#F8FAFC]">WinProgol Reducidas</span>
             <span className="text-[#64748B]">•</span>
             <span className="text-[11px] text-[#64748B]">
