@@ -99,6 +99,7 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
+          {/* Botón de envío */}
           <button
             type="submit"
             disabled={cargando || !emailInput.trim()}
@@ -108,53 +109,7 @@ export const AuthModal: React.FC = () => {
             <span>{cargando ? 'Ingresando...' : 'Entrar con este Correo'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
-
-          {/* Botón de acceso rápido como Administrador */}
-          <div className="pt-3 border-t border-[#334155]/60">
-            <button
-              type="button"
-              onClick={() => loginConCorreo('pegasocorona@gmail.com', 'Administrador WinProgol')}
-              className="w-full flex items-center justify-between rounded-xl border border-[#3B82F6]/40 bg-[#3B82F6]/10 py-2.5 px-3.5 text-xs font-bold text-[#3B82F6] hover:bg-[#3B82F6]/20 transition cursor-pointer"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <Key className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Acceso rápido: pegasocorona@gmail.com</span>
-              </div>
-              <span className="rounded bg-[#3B82F6]/20 px-1.5 py-0.5 text-[9px] font-black text-[#3B82F6] uppercase shrink-0">
-                Admin
-              </span>
-            </button>
-          </div>
         </form>
-
-        {/* Demo Fast-Login Helpers - Solo visible en entorno local de desarrollo */}
-        {import.meta.env.DEV && (
-          <div className="pt-3 border-t border-[#334155]/60 mt-3">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-[#94A3B8] mb-1.5">
-              <span>Cuentas de prueba en desarrollo:</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => mockLogin('user')}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#334155] bg-[#0F172A] py-1.5 px-2 text-[11px] font-semibold text-[#10B981] hover:bg-[#1E293B] transition cursor-pointer"
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Juan (Demo)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => mockLogin('guest')}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-[#334155] bg-[#0F172A] py-1.5 px-2 text-[11px] font-semibold text-[#FACC15] hover:bg-[#1E293B] transition cursor-pointer"
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Usuario Nuevo</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {supabaseConfigError && (
           <div className="mt-3 p-2.5 rounded-lg border border-[#FACC15]/40 bg-[#FACC15]/10 text-[11px] text-[#FACC15] flex items-start gap-2">
