@@ -256,9 +256,16 @@ export const DashboardView: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#94A3B8] font-mono">{currentUser.email}</p>
+              {currentUser.rol !== 'admin' ? (
+                <p className="text-xs text-[#94A3B8] font-mono">{currentUser.email}</p>
+              ) : (
+                <p className="text-xs text-[#3B82F6] font-semibold flex items-center gap-1.5 mt-0.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
+                  Panel de Administración y Control
+                </p>
+              )}
               <p className="text-[11px] text-[#64748B] mt-1">
-                Cuenta por correo electrónico • ID: {currentUser.id.slice(0, 12)}...
+                {currentUser.rol === 'admin' ? 'Perfil Master Autorizado' : 'Cuenta de usuario'} • ID: {currentUser.id.slice(0, 12)}...
               </p>
             </div>
           </div>
