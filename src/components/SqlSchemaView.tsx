@@ -46,7 +46,7 @@ export const SqlSchemaView: React.FC = () => {
         </div>
 
         <p className="mt-4 text-xs sm:text-sm text-[#94A3B8] leading-relaxed">
-          Este script crea las 5 tablas requeridas vinculadas con el sistema de autenticación de Google en Supabase (<code className="text-[#10B981]">auth.users</code>), junto con índices optimizados, triggers y políticas de seguridad RLS (Row Level Security).
+          Este script crea las 5 tablas requeridas vinculadas con el sistema de usuarios en Supabase (<code className="text-[#10B981]">auth.users / public.usuarios</code>), junto con índices optimizados, triggers y políticas de seguridad RLS (Row Level Security).
         </p>
       </div>
 
@@ -58,7 +58,7 @@ export const SqlSchemaView: React.FC = () => {
             1. public.usuarios
           </div>
           <p className="text-[#94A3B8] leading-relaxed">
-            Sincronizado vía Trigger con <code className="text-[#F8FAFC]">auth.users</code> de Google OAuth. Almacena rol (<code className="text-[#10B981]">admin</code> / <code className="text-[#10B981]">user</code>), nombre y avatar.
+            Gestión de usuarios registrados por correo. Almacena rol (<code className="text-[#10B981]">admin</code> / <code className="text-[#10B981]">user</code>), nombre y preferencias.
           </p>
         </div>
 

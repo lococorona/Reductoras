@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, User, LogOut, CheckCircle2, AlertCircle, Database, LayoutDashboard, Settings } from 'lucide-react';
+import { ShieldCheck, User, LogOut, CheckCircle2, AlertCircle, Database, LayoutDashboard, Settings, Mail } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -177,8 +177,8 @@ export const Navbar: React.FC = () => {
               onClick={() => setAuthModalOpen(true)}
               className="flex items-center gap-2 rounded-lg bg-[#10B981] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-xs"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Acceder con Google</span>
+              <Mail className="w-4 h-4" />
+              <span>Iniciar Sesión</span>
             </button>
           )}
         </div>

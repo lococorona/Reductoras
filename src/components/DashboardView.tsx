@@ -223,7 +223,7 @@ export const DashboardView: React.FC = () => {
     return (
       <div className="rounded-2xl border border-[#334155] bg-[#161F30] p-8 text-center max-w-lg mx-auto">
         <User className="w-12 h-12 text-[#94A3B8] mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-[#F8FAFC]">Inicia Sesión con Google</h2>
+        <h2 className="text-xl font-bold text-[#F8FAFC]">Inicia Sesión por Correo</h2>
         <p className="text-xs text-[#94A3B8] mt-1 mb-6">
           Accede para consultar tu historial de quinielas reducidas y administrar tu suscripción.
         </p>
@@ -258,7 +258,7 @@ export const DashboardView: React.FC = () => {
               </div>
               <p className="text-xs text-[#94A3B8] font-mono">{currentUser.email}</p>
               <p className="text-[11px] text-[#64748B] mt-1">
-                Registrado vía Google Sign-In • ID: {currentUser.id.slice(0, 12)}...
+                Cuenta por correo electrónico • ID: {currentUser.id.slice(0, 12)}...
               </p>
             </div>
           </div>

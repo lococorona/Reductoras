@@ -343,7 +343,7 @@ export const AdminView: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-[#0F172A] text-[#94A3B8] border-b border-[#334155]">
                 <tr>
-                  <th className="p-3">Usuario / Google</th>
+                  <th className="p-3">Usuario / Correo</th>
                   <th className="p-3">Estado Suscripción</th>
                   <th className="p-3">Vigencia</th>
                   <th className="p-3 text-right">Acción</th>

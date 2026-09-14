@@ -2,8 +2,23 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Usuario, Suscripcion, CodigoPromocional, QuinielaGenerada, Concurso } from '../types';
 import { CONCURSO_DEFAULT } from '../data/concursoDefault';
 
-const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+// Credenciales directas de Supabase
+const DEFAULT_SUPABASE_URL = 'https://srmqezzrjpvyrjkqjpve.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_Ln7jrg3Kddc4OJpXWAj6MA_CB2pA_vr';
+
+const rawUrl = (
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+  DEFAULT_SUPABASE_URL
+).trim();
+
+const rawKey = (
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  DEFAULT_SUPABASE_KEY
+).trim();
 
 /**
  * Extrae el project ref de un token JWT de Supabase si está disponible
@@ -271,6 +286,41 @@ export const SupabaseService = {
       }
     }
     return { error: 'Supabase credentials are not configured.' };
+  },
+
+  // Login con correo personalizado o Google
+  loginWithEmail(email: string, nombre?: string): Usuario {
+    const cleanEmail = email.trim().toLowerCase();
+    const esAdmin = isAdminEmail(cleanEmail);
+    const nombreFinal = (nombre && nombre.trim()) || cleanEmail.split('@')[0] || (esAdmin ? 'Administrador WinProgol' : 'Usuario Progol');
+    
+    // Si ya existe este usuario guardado
+    const users = getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
+    const existingUser = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    
+    let usuario: Usuario;
+    if (existingUser) {
+      usuario = {
+        ...existingUser,
+        rol: esAdmin ? 'admin' : existingUser.rol,
+      };
+    } else {
+      usuario = {
+        id: esAdmin ? 'usr-admin' : `usr-${Date.now()}`,
+        email: cleanEmail,
+        nombre: nombreFinal,
+        avatarUrl: esAdmin
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+          : `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
+        rol: esAdmin ? 'admin' : 'user',
+        fechaRegistro: new Date().toISOString(),
+      };
+      users.push(usuario);
+      setLocalItem('winprogol_registered_users', users);
+    }
+
+    setLocalItem(STORAGE_KEYS.USER, usuario);
+    return usuario;
   },
 
   // Mock Google Sign In for instant preview testing
