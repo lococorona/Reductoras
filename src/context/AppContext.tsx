@@ -38,7 +38,7 @@ interface AppContextType {
   toast: Toast | null;
   mostrarToast: (mensaje: string, tipo?: 'success' | 'error' | 'info') => void;
   iniciarLoginGoogle: () => Promise<void>;
-  loginConCorreo: (email: string, nombre?: string) => void;
+  loginConCorreo: (email: string, nombre?: string, password?: string) => Promise<void>;
   mockLogin: (tipo: 'user' | 'admin' | 'guest') => void;
   cerrarSesion: () => void;
   abrirReductora: (tipo: TipoReductora) => void;
@@ -201,12 +201,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? currentUser.rol === 'admin' || tieneSuscripcionActiva || SupabaseService.tieneAccesoPorCodigo(currentUser.id, concurso.numeroConcurso)
     : false;
 
-  const loginConCorreo = async (email: string, nombre?: string) => {
-    const user = await SupabaseService.loginWithEmail(email, nombre);
+  const loginConCorreo = async (email: string, nombre?: string, password?: string) => {
+    const user = await SupabaseService.loginWithEmail(email, nombre, password);
     setCurrentUser(user);
     setAuthModalOpen(false);
     recargarHistorial();
-    mostrarToast(`¡Bienvenido ${user.nombre}! Sesión sincronizada`, 'success');
+    mostrarToast(`¡Bienvenido ${user.nombre}!`, 'success');
   };
 
   const iniciarLoginGoogle = async () => {

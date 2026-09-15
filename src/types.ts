@@ -57,6 +57,7 @@ export interface Usuario {
   id: string;
   email: string;
   nombre: string;
+  password?: string;
   avatarUrl?: string;
   rol: 'user' | 'admin';
   fechaRegistro: string;

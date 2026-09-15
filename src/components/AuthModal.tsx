@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { isSupabaseConfigured, supabaseConfigError, isAdminEmail } from '../lib/supabase';
 import logoWinProgol from '../assets/images/regenerated_image_1789352960422.jpg';
@@ -7,7 +7,9 @@ import logoWinProgol from '../assets/images/regenerated_image_1789352960422.jpg'
 export const AuthModal: React.FC = () => {
   const { authModalOpen, setAuthModalOpen, loginConCorreo } = useApp();
   const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [nombreInput, setNombreInput] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export const AuthModal: React.FC = () => {
 
   const esAdminDetectado = isAdminEmail(emailInput.trim());
 
-  const handleCorreoSubmit = (e: React.FormEvent) => {
+  const handleCorreoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = emailInput.trim();
     if (!cleanEmail) return;
@@ -30,7 +32,7 @@ export const AuthModal: React.FC = () => {
     setCargando(true);
     try {
       localStorage.setItem('winprogol_last_login_email', cleanEmail);
-      loginConCorreo(cleanEmail, nombreInput.trim() || undefined);
+      await loginConCorreo(cleanEmail, nombreInput.trim() || undefined, passwordInput.trim() || undefined);
     } finally {
       setCargando(false);
     }
@@ -58,9 +60,9 @@ export const AuthModal: React.FC = () => {
               referrerPolicy="no-referrer"
             />
           </div>
-          <h3 className="text-xl font-black text-[#F8FAFC]">Iniciar Sesión por Correo</h3>
+          <h3 className="text-xl font-black text-[#F8FAFC]">Iniciar Sesión</h3>
           <p className="text-xs text-[#94A3B8] mt-1">
-            Ingresa tu correo para acceder al sistema, guardar quinielas y activar suscripciones
+            Acceso directo e inmediato sin necesidad de verificar correo
           </p>
         </div>
 
@@ -81,6 +83,30 @@ export const AuthModal: React.FC = () => {
                 className="w-full rounded-xl border border-[#334155] bg-[#0F172A] pl-3.5 pr-10 py-2.5 text-xs text-[#F8FAFC] placeholder-[#64748B] focus:border-[#10B981] focus:ring-1 focus:ring-[#10B981] focus:outline-hidden transition"
               />
               <Mail className="absolute right-3.5 top-3 w-4 h-4 text-[#64748B]" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#F8FAFC] mb-1.5">
+              Contraseña <span className="text-[#10B981]">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={mostrarPassword ? 'text' : 'password'}
+                required
+                placeholder="Ingresa tu contraseña"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full rounded-xl border border-[#334155] bg-[#0F172A] pl-3.5 pr-10 py-2.5 text-xs text-[#F8FAFC] placeholder-[#64748B] focus:border-[#10B981] focus:ring-1 focus:ring-[#10B981] focus:outline-hidden transition font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarPassword(!mostrarPassword)}
+                className="absolute right-3.5 top-2.5 text-[#64748B] hover:text-[#F8FAFC] transition cursor-pointer"
+                title={mostrarPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+              >
+                {mostrarPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
@@ -108,10 +134,10 @@ export const AuthModal: React.FC = () => {
           {/* Botón de envío */}
           <button
             type="submit"
-            disabled={cargando || !emailInput.trim()}
+            disabled={cargando || !emailInput.trim() || !passwordInput.trim()}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#10B981] py-3 px-4 text-xs sm:text-sm font-bold text-white hover:bg-[#059669] active:scale-[0.99] transition shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Mail className="w-4 h-4" />
+            <Lock className="w-4 h-4" />
             <span>{cargando ? 'Entrando...' : 'Entrar'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
@@ -128,9 +154,7 @@ export const AuthModal: React.FC = () => {
         )}
 
         <p className="text-[10px] text-[#64748B] text-center mt-4">
-          {isSupabaseConfigured
-            ? 'Conectado a proyecto Supabase oficial (srmqezzrjpvyrjkqjpve.supabase.co).'
-            : 'Sesión guardada en almacenamiento local.'}
+          Acceso sin confirmaciones por correo. Los datos se guardan de forma instantánea.
         </p>
       </div>
     </div>

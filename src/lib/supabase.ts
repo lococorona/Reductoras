@@ -288,13 +288,13 @@ export const SupabaseService = {
     return { error: 'Supabase credentials are not configured.' };
   },
 
-  // Login con correo personalizado o Google con sincronización remota a Supabase
-  async loginWithEmail(email: string, nombre?: string): Promise<Usuario> {
+  // Login con correo y contraseña (sin requerir verificación por correo)
+  async loginWithEmail(email: string, nombre?: string, password?: string): Promise<Usuario> {
     const cleanEmail = email.trim().toLowerCase();
     const esAdmin = isAdminEmail(cleanEmail);
     const nombreFinal = (nombre && nombre.trim()) || cleanEmail.split('@')[0] || (esAdmin ? 'Administrador WinProgol' : 'Usuario Progol');
     
-    // Si ya existe este usuario guardado
+    // Si ya existe este usuario guardado localmente
     const rawUsers = getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
     const existingIndex = rawUsers.findIndex(
       (u) => u.email.toLowerCase() === cleanEmail || (esAdmin && u.id === 'usr-admin')
@@ -307,6 +307,7 @@ export const SupabaseService = {
         id: esAdmin ? 'usr-admin' : rawUsers[existingIndex].id,
         email: cleanEmail,
         nombre: nombreFinal,
+        password: password || rawUsers[existingIndex].password || '',
         rol: esAdmin ? 'admin' : rawUsers[existingIndex].rol,
       };
       rawUsers[existingIndex] = usuario;
@@ -315,6 +316,7 @@ export const SupabaseService = {
         id: esAdmin ? 'usr-admin' : `usr-${Date.now()}`,
         email: cleanEmail,
         nombre: nombreFinal,
+        password: password || '',
         avatarUrl: esAdmin
           ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
           : `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
@@ -345,34 +347,33 @@ export const SupabaseService = {
     if (!supabase) return;
 
     try {
-      // 1. Intentar registrar en Supabase Auth si es posible (OTP / Magic link)
-      supabase.auth.signInWithOtp({
-        email: usuario.email,
-        options: {
-          data: {
-            full_name: usuario.nombre,
-            rol: usuario.rol,
-          },
-        },
-      }).catch((authErr) => {
-        console.warn('Aviso Supabase Auth:', authErr?.message || authErr);
-      });
-
-      // 2. Insertar / Actualizar en la tabla public.usuarios
-      const { error: userError } = await supabase.from('usuarios').upsert({
+      // 1. Insertar / Actualizar en la tabla public.usuarios con contraseña si está disponible
+      const payload: Record<string, any> = {
         email: usuario.email.toLowerCase().trim(),
         nombre: usuario.nombre,
         avatar_url: usuario.avatarUrl || '',
         rol: usuario.rol,
-      }, { onConflict: 'email' });
+      };
+
+      if (usuario.password) {
+        payload.password = usuario.password;
+      }
+
+      const { error: userError } = await supabase.from('usuarios').upsert(payload, { onConflict: 'email' });
 
       if (userError) {
-        console.warn('Aviso al sincronizar usuario en tabla public.usuarios:', userError.message);
+        // Si la columna password aún no ha sido agregada por el SQL en Supabase, reintentar sin password
+        if (userError.message?.includes('password') || userError.code === 'PGRST204') {
+          delete payload.password;
+          await supabase.from('usuarios').upsert(payload, { onConflict: 'email' });
+        } else {
+          console.warn('Aviso al sincronizar usuario en tabla public.usuarios:', userError.message);
+        }
       } else {
         console.log('Usuario sincronizado en Supabase correctamente:', usuario.email);
       }
 
-      // 3. Si es Admin o tiene suscripción activa, sincronizar en tabla public.suscripciones
+      // 2. Si es Admin o tiene suscripción activa, sincronizar en tabla public.suscripciones
       if (usuario.rol === 'admin' || isAdminEmail(usuario.email)) {
         await supabase.from('suscripciones').upsert({
           usuario_email: usuario.email.toLowerCase().trim(),
@@ -380,7 +381,7 @@ export const SupabaseService = {
           estado: 'activa',
           fecha_inicio: new Date().toISOString(),
           fecha_fin: '2030-12-31T23:59:59Z',
-          metodo_pago: 'Admin',
+          metodo_pago: 'Transferencia',
           referencia_pago: 'Acceso Sistema Admin Vitalicio',
         }, { onConflict: 'usuario_email' });
       }

@@ -29,6 +29,7 @@ ALTER TABLE public.suscripciones ALTER COLUMN usuario_id DROP NOT NULL;
 
 -- 3. Asegurar columnas en public.usuarios
 ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre TEXT DEFAULT 'Usuario Progol';
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '';
 ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';
 ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS rol TEXT DEFAULT 'user';
 ALTER TABLE public.usuarios ALTER COLUMN id SET DEFAULT gen_random_uuid();
