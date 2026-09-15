@@ -519,8 +519,17 @@ export const AdminView: React.FC = () => {
                       <tr key={c.id} className="hover:bg-[#1E293B]/60 transition">
                         <td className="p-3 font-mono font-bold text-[#10B981]">{c.codigo}</td>
                         <td className="p-3 font-mono text-[#F8FAFC]">Concurso #{c.concursoNumero}</td>
-                        <td className="p-3 font-mono text-[#94A3B8]">
-                          {c.usosActuales} / {c.usosMaximos}
+                        <td className="p-3 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[#F8FAFC] font-bold">{c.usosActuales} / {c.usosMaximos}</span>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans font-bold ${
+                              c.usosActuales >= c.usosMaximos
+                                ? 'bg-[#EF4444]/20 text-[#F87171] border border-[#EF4444]/30'
+                                : 'bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30'
+                            }`}>
+                              {c.usosMaximos - c.usosActuales} disp.
+                            </span>
+                          </div>
                         </td>
                         <td className="p-3 text-[#94A3B8]">{c.descripcion || 'Sin descripción'}</td>
                         <td className="p-3">

@@ -164,10 +164,12 @@ export const Navbar: React.FC = () => {
           ) : (
             <button
               onClick={() => setAuthModalOpen(true)}
-              className="flex items-center gap-2 rounded-lg bg-[#10B981] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-xs"
+              className="flex items-center justify-center gap-1.5 rounded-lg bg-[#10B981] px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-xs shrink-0"
+              title="Iniciar Sesión"
             >
               <Mail className="w-4 h-4" />
-              <span>Iniciar Sesión</span>
+              <span className="hidden sm:inline">Iniciar Sesión</span>
+              <span className="inline sm:hidden text-[11px]">Entrar</span>
             </button>
           )}
         </div>

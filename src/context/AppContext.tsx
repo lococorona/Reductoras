@@ -43,7 +43,7 @@ interface AppContextType {
   cerrarSesion: () => void;
   abrirReductora: (tipo: TipoReductora) => void;
   generarQuiniela: (pronosticos: Record<number, Outcome[]>) => boolean;
-  canjearCodigoPromocional: (codigo: string) => { exito: boolean; mensaje: string };
+  canjearCodigoPromocional: (codigo: string) => Promise<{ exito: boolean; mensaje: string }>;
   actualizarConcurso: (nuevoConcurso: Concurso) => void;
   aprobarSuscripcionUsuario: (usuarioId: string, email: string, nombre: string) => void;
   crearNuevoCodigo: (codigo: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>) => void;
@@ -115,7 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', sincronizarConcursoYCodigos);
 
-    // Escuchar cambios en TIEMPO REAL desde Supabase para la tabla concursos
+    // Escuchar cambios en TIEMPO REAL desde Supabase para concursos y códigos promocionales
     let realtimeChannel: any = null;
     if (supabase) {
       realtimeChannel = supabase
@@ -123,6 +123,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'concursos' },
+          () => {
+            sincronizarConcursoYCodigos();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'codigos_promocionales' },
           () => {
             sincronizarConcursoYCodigos();
           }
@@ -257,11 +264,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const canjearCodigoPromocional = (codigoStr: string): { exito: boolean; mensaje: string } => {
+  const canjearCodigoPromocional = async (codigoStr: string): Promise<{ exito: boolean; mensaje: string }> => {
     if (!currentUser) {
       return { exito: false, mensaje: 'Debes iniciar sesión con tu correo para canjear un código.' };
     }
-    const res = SupabaseService.validarCodigoConcurso(codigoStr, concurso.numeroConcurso, currentUser.id);
+    const res = await SupabaseService.validarCodigoConcurso(codigoStr, concurso.numeroConcurso, currentUser.id);
     if (res.valid) {
       setCodigos(SupabaseService.getCodigos());
       mostrarToast(res.mensaje, 'success');

@@ -18,7 +18,7 @@ export const PaywallModal: React.FC = () => {
 
   if (!paywallModalOpen) return null;
 
-  const handleValidarCodigo = (e: React.FormEvent) => {
+  const handleValidarCodigo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!codigoInput.trim()) {
       setErrorLocal('Por favor ingresa un código promocional o clave.');
@@ -27,13 +27,14 @@ export const PaywallModal: React.FC = () => {
     setErrorLocal('');
     setValidando(true);
 
-    setTimeout(() => {
-      const res = canjearCodigoPromocional(codigoInput.trim());
-      setValidando(false);
+    try {
+      const res = await canjearCodigoPromocional(codigoInput.trim());
       if (!res.exito) {
         setErrorLocal(res.mensaje);
       }
-    }, 400);
+    } finally {
+      setValidando(false);
+    }
   };
 
   const copiarTexto = (texto: string, clave: string) => {

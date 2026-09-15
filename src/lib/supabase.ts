@@ -853,7 +853,7 @@ export const SupabaseService = {
     return true;
   },
 
-  validarCodigoConcurso(codigoStr: string, concursoNumero: number, usuarioId: string): { valid: boolean; mensaje: string } {
+  async validarCodigoConcurso(codigoStr: string, concursoNumero: number, usuarioId: string): Promise<{ valid: boolean; mensaje: string }> {
     const limpio = codigoStr.trim().toUpperCase();
     const codigos = this.getCodigos();
     const target = codigos.find((c) => c.codigo.toUpperCase() === limpio);
@@ -892,7 +892,19 @@ export const SupabaseService = {
     canjes[usuarioId] = usuarioCanjes;
     setLocalItem(STORAGE_KEYS.CANJES, canjes);
 
-    return { valid: true, mensaje: `¡Código validado con éxito! Acceso concedido para el Concurso ${concursoNumero}.` };
+    // Sincronizar incremento en Supabase para que otros usuarios y el Admin lo vean en tiempo real
+    if (supabase) {
+      try {
+        await supabase
+          .from('codigos_promocionales')
+          .update({ usos_actuales: target.usosActuales })
+          .eq('codigo', target.codigo);
+      } catch (err) {
+        console.warn('Aviso al actualizar usos del código en Supabase:', err);
+      }
+    }
+
+    return { valid: true, mensaje: `¡Código validado con éxito! Acceso concedido para el Concurso ${concursoNumero}. (Uso ${target.usosActuales}/${target.usosMaximos})` };
   },
 
   tieneAccesoPorCodigo(usuarioId: string, concursoNumero: number): boolean {
