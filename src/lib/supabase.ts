@@ -288,22 +288,28 @@ export const SupabaseService = {
     return { error: 'Supabase credentials are not configured.' };
   },
 
-  // Login con correo personalizado o Google
-  loginWithEmail(email: string, nombre?: string): Usuario {
+  // Login con correo personalizado o Google con sincronización remota a Supabase
+  async loginWithEmail(email: string, nombre?: string): Promise<Usuario> {
     const cleanEmail = email.trim().toLowerCase();
     const esAdmin = isAdminEmail(cleanEmail);
     const nombreFinal = (nombre && nombre.trim()) || cleanEmail.split('@')[0] || (esAdmin ? 'Administrador WinProgol' : 'Usuario Progol');
     
     // Si ya existe este usuario guardado
-    const users = getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
-    const existingUser = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    const rawUsers = getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
+    const existingIndex = rawUsers.findIndex(
+      (u) => u.email.toLowerCase() === cleanEmail || (esAdmin && u.id === 'usr-admin')
+    );
     
     let usuario: Usuario;
-    if (existingUser) {
+    if (existingIndex >= 0) {
       usuario = {
-        ...existingUser,
-        rol: esAdmin ? 'admin' : existingUser.rol,
+        ...rawUsers[existingIndex],
+        id: esAdmin ? 'usr-admin' : rawUsers[existingIndex].id,
+        email: cleanEmail,
+        nombre: nombreFinal,
+        rol: esAdmin ? 'admin' : rawUsers[existingIndex].rol,
       };
+      rawUsers[existingIndex] = usuario;
     } else {
       usuario = {
         id: esAdmin ? 'usr-admin' : `usr-${Date.now()}`,
@@ -315,12 +321,151 @@ export const SupabaseService = {
         rol: esAdmin ? 'admin' : 'user',
         fechaRegistro: new Date().toISOString(),
       };
-      users.push(usuario);
-      setLocalItem('winprogol_registered_users', users);
+      rawUsers.push(usuario);
     }
 
+    // Guardar lista desduplicada en local
+    const uniqueMap = new Map<string, Usuario>();
+    rawUsers.forEach((u) => {
+      if (u && u.id) {
+        uniqueMap.set(u.id, u);
+      }
+    });
+    setLocalItem('winprogol_registered_users', Array.from(uniqueMap.values()));
     setLocalItem(STORAGE_KEYS.USER, usuario);
+
+    // Sincronizar usuario y suscripción con Supabase en la base de datos
+    await this.sincronizarUsuarioRemoto(usuario);
+
     return usuario;
+  },
+
+  // Sincroniza el perfil del usuario y su suscripción en Supabase
+  async sincronizarUsuarioRemoto(usuario: Usuario): Promise<void> {
+    if (!supabase) return;
+
+    try {
+      // 1. Intentar registrar en Supabase Auth si es posible (OTP / Magic link)
+      supabase.auth.signInWithOtp({
+        email: usuario.email,
+        options: {
+          data: {
+            full_name: usuario.nombre,
+            rol: usuario.rol,
+          },
+        },
+      }).catch((authErr) => {
+        console.warn('Aviso Supabase Auth:', authErr?.message || authErr);
+      });
+
+      // 2. Insertar / Actualizar en la tabla public.usuarios
+      const { error: userError } = await supabase.from('usuarios').upsert({
+        email: usuario.email.toLowerCase().trim(),
+        nombre: usuario.nombre,
+        avatar_url: usuario.avatarUrl || '',
+        rol: usuario.rol,
+      }, { onConflict: 'email' });
+
+      if (userError) {
+        console.warn('Aviso al sincronizar usuario en tabla public.usuarios:', userError.message);
+      } else {
+        console.log('Usuario sincronizado en Supabase correctamente:', usuario.email);
+      }
+
+      // 3. Si es Admin o tiene suscripción activa, sincronizar en tabla public.suscripciones
+      if (usuario.rol === 'admin' || isAdminEmail(usuario.email)) {
+        await supabase.from('suscripciones').upsert({
+          usuario_email: usuario.email.toLowerCase().trim(),
+          monto: 100,
+          estado: 'activa',
+          fecha_inicio: new Date().toISOString(),
+          fecha_fin: '2030-12-31T23:59:59Z',
+          metodo_pago: 'Admin',
+          referencia_pago: 'Acceso Sistema Admin Vitalicio',
+        }, { onConflict: 'usuario_email' });
+      }
+    } catch (err) {
+      console.warn('Excepción al sincronizar con Supabase:', err);
+    }
+  },
+
+  // Cargar usuarios desde Supabase
+  async cargarUsuariosRemotos(): Promise<Usuario[]> {
+    if (!supabase) return this.getRegisteredUsers();
+
+    try {
+      const { data, error } = await supabase.from('usuarios').select('*');
+      if (error) {
+        console.warn('Aviso al cargar usuarios de Supabase:', error.message);
+        return this.getRegisteredUsers();
+      }
+
+      if (data && data.length > 0) {
+        const remoteUsers: Usuario[] = data.map((row: any) => ({
+          id: String(row.id || `usr-${row.email}`),
+          email: String(row.email).toLowerCase().trim(),
+          nombre: String(row.nombre || row.email.split('@')[0]),
+          avatarUrl: row.avatar_url || '',
+          rol: isAdminEmail(row.email) ? 'admin' : (row.rol === 'admin' ? 'admin' : 'user'),
+          fechaRegistro: row.created_at || new Date().toISOString(),
+        }));
+
+        // Combinar con los existentes sin duplicar
+        const local = this.getRegisteredUsers();
+        const mergedMap = new Map<string, Usuario>();
+        local.forEach((u) => mergedMap.set(u.email.toLowerCase(), u));
+        remoteUsers.forEach((u) => mergedMap.set(u.email.toLowerCase(), u));
+
+        const result = Array.from(mergedMap.values());
+        setLocalItem('winprogol_registered_users', result);
+        return result;
+      }
+      return this.getRegisteredUsers();
+    } catch (e) {
+      console.warn('Excepción al cargar usuarios remotos:', e);
+      return this.getRegisteredUsers();
+    }
+  },
+
+  // Cargar suscripciones desde Supabase
+  async cargarSuscripcionesRemotas(): Promise<Suscripcion[]> {
+    if (!supabase) return this.getSuscripciones();
+
+    try {
+      const { data, error } = await supabase.from('suscripciones').select('*');
+      if (error) {
+        console.warn('Aviso al cargar suscripciones de Supabase:', error.message);
+        return this.getSuscripciones();
+      }
+
+      if (data && data.length > 0) {
+        const remoteSubs: Suscripcion[] = data.map((row: any) => ({
+          id: String(row.id || `sub-${row.usuario_email}`),
+          usuarioId: String(row.usuario_id || `usr-${row.usuario_email}`),
+          usuarioEmail: String(row.usuario_email || '').toLowerCase().trim(),
+          usuarioNombre: String(row.usuario_nombre || row.usuario_email?.split('@')[0] || 'Usuario'),
+          monto: Number(row.monto || 100),
+          estado: row.estado as any,
+          fechaInicio: row.fecha_inicio || new Date().toISOString(),
+          fechaFin: row.fecha_fin || new Date().toISOString(),
+          metodoPago: row.metodo_pago || 'Transferencia',
+          referenciaPago: row.referencia_pago || '',
+        }));
+
+        const local = this.getSuscripciones();
+        const mergedMap = new Map<string, Suscripcion>();
+        local.forEach((s) => mergedMap.set(s.usuarioEmail.toLowerCase(), s));
+        remoteSubs.forEach((s) => mergedMap.set(s.usuarioEmail.toLowerCase(), s));
+
+        const result = Array.from(mergedMap.values());
+        setLocalItem(STORAGE_KEYS.SUSCRIPCIONES, result);
+        return result;
+      }
+      return this.getSuscripciones();
+    } catch (e) {
+      console.warn('Excepción al cargar suscripciones remotas:', e);
+      return this.getSuscripciones();
+    }
   },
 
   // Mock Google Sign In for instant preview testing
@@ -413,8 +558,100 @@ export const SupabaseService = {
     return getLocalItem<Concurso>(STORAGE_KEYS.CONCURSO, CONCURSO_DEFAULT);
   },
 
-  guardarConcurso(concurso: Concurso): void {
+  async cargarConcursoActivoRemoto(): Promise<Concurso | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('concursos')
+        .select('*')
+        .order('numero_concurso', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.warn('Aviso al cargar concurso de Supabase:', error.message);
+        return null;
+      }
+
+      if (data && data.length > 0) {
+        const row = data[0];
+        let partidosRemotos = Array.isArray(row.partidos) && row.partidos.length === 14 ? row.partidos : CONCURSO_DEFAULT.partidos;
+
+        // Normalizar cada partido para asegurar propiedades estándar (torneo, probabilidadL/E/V, etc.)
+        partidosRemotos = partidosRemotos.map((p: any, idx: number) => ({
+          id: p.id !== undefined ? p.id : idx + 1,
+          numero: p.numero !== undefined ? p.numero : idx + 1,
+          local: p.local || CONCURSO_DEFAULT.partidos[idx]?.local || `Local ${idx + 1}`,
+          visita: p.visita || CONCURSO_DEFAULT.partidos[idx]?.visita || `Visita ${idx + 1}`,
+          torneo: p.torneo || p.liga || CONCURSO_DEFAULT.partidos[idx]?.torneo || 'Liga Oficial',
+          horario: p.horario || CONCURSO_DEFAULT.partidos[idx]?.horario || 'Por definir',
+          probabilidadL: p.probabilidadL !== undefined ? Number(p.probabilidadL) : (p.probL !== undefined ? Number(p.probL) : 34),
+          probabilidadE: p.probabilidadE !== undefined ? Number(p.probabilidadE) : (p.probE !== undefined ? Number(p.probE) : 33),
+          probabilidadV: p.probabilidadV !== undefined ? Number(p.probabilidadV) : (p.probV !== undefined ? Number(p.probV) : 33),
+          momioL: p.momioL !== undefined ? p.momioL : 2.0,
+          momioE: p.momioE !== undefined ? p.momioE : 3.2,
+          momioV: p.momioV !== undefined ? p.momioV : 3.4,
+          resultadoReal: p.resultadoReal || null,
+        }));
+
+        const concursoRemoto: Concurso = {
+          id: String(row.id || ''),
+          numeroConcurso: Number(row.numero_concurso),
+          nombre: row.nombre || `Progol Concurso No. ${row.numero_concurso}`,
+          bolsa: row.bolsa || '5 Millones',
+          fechaCierre: row.fecha_cierre || new Date().toISOString(),
+          activo: row.activo !== false,
+          partidos: partidosRemotos,
+        };
+        // Guardar en cache local para acceso offline/rápido
+        setLocalItem(STORAGE_KEYS.CONCURSO, concursoRemoto);
+        return concursoRemoto;
+      }
+      return null;
+    } catch (e) {
+      console.warn('Excepción al conectar con Supabase para concursos:', e);
+      return null;
+    }
+  },
+
+  async guardarConcurso(concurso: Concurso): Promise<{ success: boolean; error?: string }> {
+    // 1. Guardar en almacenamiento local
     setLocalItem(STORAGE_KEYS.CONCURSO, concurso);
+
+    // 2. Sincronizar en la nube de Supabase
+    if (supabase) {
+      try {
+        const payload: Record<string, any> = {
+          numero_concurso: concurso.numeroConcurso,
+          nombre: concurso.nombre,
+          fecha_cierre: concurso.fechaCierre,
+          activo: true,
+          partidos: concurso.partidos,
+          actualizado_en: new Date().toISOString(),
+        };
+
+        let { error } = await supabase
+          .from('concursos')
+          .upsert({ ...payload, bolsa: concurso.bolsa }, { onConflict: 'numero_concurso' });
+
+        // Si la columna bolsa aún no existe en Supabase, reintentar sin bolsa
+        if (error && (error.message?.includes('bolsa') || error.code === '42703')) {
+          const retry = await supabase
+            .from('concursos')
+            .upsert(payload, { onConflict: 'numero_concurso' });
+          error = retry.error;
+        }
+
+        if (error) {
+          console.error('Error al guardar en Supabase:', error);
+          return { success: false, error: error.message };
+        }
+        return { success: true };
+      } catch (e: any) {
+        console.error('Excepción al guardar en Supabase:', e);
+        return { success: false, error: e?.message || 'Error de conexión' };
+      }
+    }
+    return { success: true };
   },
 
   // Suscripciones
@@ -423,7 +660,21 @@ export const SupabaseService = {
   },
 
   getRegisteredUsers(): Usuario[] {
-    return getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
+    const raw = getLocalItem<Usuario[]>('winprogol_registered_users', DEFAULT_USERS);
+    const seenIds = new Set<string>();
+    const seenEmails = new Set<string>();
+    const unique: Usuario[] = [];
+
+    for (const u of raw) {
+      if (!u || !u.id) continue;
+      const cleanEmail = (u.email || '').toLowerCase().trim();
+      if (!seenIds.has(u.id) && (!cleanEmail || !seenEmails.has(cleanEmail))) {
+        seenIds.add(u.id);
+        if (cleanEmail) seenEmails.add(cleanEmail);
+        unique.push(u);
+      }
+    }
+    return unique;
   },
 
   verificarSuscripcionActiva(usuarioId: string, usuarioEmail?: string): boolean {
@@ -470,6 +721,22 @@ export const SupabaseService = {
     }
 
     setLocalItem(STORAGE_KEYS.SUSCRIPCIONES, subs);
+
+    // Sincronizar con Supabase
+    if (supabase) {
+      supabase.from('suscripciones').upsert({
+        usuario_email: email.toLowerCase().trim(),
+        monto: 100,
+        estado: 'activa',
+        fecha_inicio: now.toISOString(),
+        fecha_fin: fechaFin,
+        metodo_pago: 'Admin',
+        referencia_pago: 'Aprobado manualmente por Admin',
+      }, { onConflict: 'usuario_email' }).then(({ error }) => {
+        if (error) console.warn('Aviso al guardar suscripción en Supabase:', error.message);
+      });
+    }
+
     return nuevaSub;
   },
 
@@ -478,7 +745,42 @@ export const SupabaseService = {
     return getLocalItem<CodigoPromocional[]>(STORAGE_KEYS.CODIGOS, DEFAULT_CODIGOS);
   },
 
-  crearCodigo(nuevo: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>): CodigoPromocional {
+  async cargarCodigosRemotos(): Promise<CodigoPromocional[]> {
+    if (!supabase) return this.getCodigos();
+    try {
+      const { data, error } = await supabase
+        .from('codigos_promocionales')
+        .select('*')
+        .order('concurso_numero', { ascending: false });
+
+      if (error) {
+        console.warn('Aviso al cargar códigos de Supabase:', error.message);
+        return this.getCodigos();
+      }
+
+      if (data && data.length > 0) {
+        const codigosRemotos: CodigoPromocional[] = data.map((row: any) => ({
+          id: String(row.id || `cod-${row.codigo}`),
+          codigo: String(row.codigo).toUpperCase(),
+          concursoNumero: Number(row.concurso_numero),
+          usosMaximos: Number(row.usos_maximos || 100),
+          usosActuales: Number(row.usos_actuales || 0),
+          activo: row.activo !== false,
+          descripcion: row.descripcion || '',
+          creadoPor: row.creado_por || 'Admin',
+          fechaCreacion: row.creado_en || new Date().toISOString(),
+        }));
+        setLocalItem(STORAGE_KEYS.CODIGOS, codigosRemotos);
+        return codigosRemotos;
+      }
+      return this.getCodigos();
+    } catch (e) {
+      console.warn('Excepción al sincronizar códigos:', e);
+      return this.getCodigos();
+    }
+  },
+
+  async crearCodigo(nuevo: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>): Promise<CodigoPromocional> {
     const codigos = this.getCodigos();
     const codigoCreado: CodigoPromocional = {
       ...nuevo,
@@ -488,22 +790,65 @@ export const SupabaseService = {
     };
     codigos.unshift(codigoCreado);
     setLocalItem(STORAGE_KEYS.CODIGOS, codigos);
+
+    // Sincronizar con Supabase
+    if (supabase) {
+      try {
+        await supabase.from('codigos_promocionales').upsert({
+          codigo: nuevo.codigo.trim().toUpperCase(),
+          concurso_numero: nuevo.concursoNumero,
+          usos_maximos: nuevo.usosMaximos,
+          usos_actuales: 0,
+          activo: nuevo.activo !== false,
+          descripcion: nuevo.descripcion,
+          creado_por: nuevo.creadoPor || 'Admin',
+        }, { onConflict: 'codigo' });
+      } catch (e) {
+        console.warn('Error al guardar código en Supabase:', e);
+      }
+    }
+
     return codigoCreado;
   },
 
-  alternarEstadoCodigo(id: string): boolean {
+  async alternarEstadoCodigo(id: string): Promise<boolean> {
     const codigos = this.getCodigos();
     const target = codigos.find((c) => c.id === id);
     if (!target) return false;
     target.activo = !target.activo;
     setLocalItem(STORAGE_KEYS.CODIGOS, codigos);
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('codigos_promocionales')
+          .update({ activo: target.activo })
+          .eq('codigo', target.codigo);
+      } catch (e) {
+        console.warn('Error al alternar código en Supabase:', e);
+      }
+    }
+
     return target.activo;
   },
 
-  eliminarCodigo(id: string): boolean {
+  async eliminarCodigo(id: string): Promise<boolean> {
     const codigos = this.getCodigos();
+    const target = codigos.find((c) => c.id === id);
     const filtrados = codigos.filter((c) => c.id !== id);
     setLocalItem(STORAGE_KEYS.CODIGOS, filtrados);
+
+    if (supabase && target) {
+      try {
+        await supabase
+          .from('codigos_promocionales')
+          .delete()
+          .eq('codigo', target.codigo);
+      } catch (e) {
+        console.warn('Error al eliminar código en Supabase:', e);
+      }
+    }
+
     return true;
   },
 
@@ -560,6 +905,19 @@ export const SupabaseService = {
     const quinielas = getLocalItem<QuinielaGenerada[]>(STORAGE_KEYS.QUINIELAS, []);
     quinielas.unshift(quiniela);
     setLocalItem(STORAGE_KEYS.QUINIELAS, quinielas);
+
+    if (supabase) {
+      supabase.from('quinielas_generadas').insert({
+        usuario_email: quiniela.usuarioEmail || 'usuario@winprogol.com',
+        concurso_numero: quiniela.concursoNumero,
+        tipo_reductora: quiniela.tipoReductora,
+        total_combinaciones: quiniela.totalCombinaciones,
+        base_pronosticos: quiniela.basePronosticos,
+        combinaciones: quiniela.combinaciones,
+      }).then(({ error }) => {
+        if (error) console.warn('Aviso al guardar quiniela en Supabase:', error.message);
+      });
+    }
   },
 
   actualizarQuinielaGenerada(quiniela: QuinielaGenerada): void {

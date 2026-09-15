@@ -112,13 +112,13 @@ export const AuthModal: React.FC = () => {
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#10B981] py-3 px-4 text-xs sm:text-sm font-bold text-white hover:bg-[#059669] active:scale-[0.99] transition shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Mail className="w-4 h-4" />
-            <span>{cargando ? 'Ingresando...' : 'Entrar con este Correo'}</span>
+            <span>{cargando ? 'Entrando...' : 'Entrar'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
         {supabaseConfigError && (
-          <div className="mt-3 p-2.5 rounded-lg border border-[#FACC15]/40 bg-[#FACC15]/10 text-[11px] text-[#FACC15] flex items-start gap-2">
+          <div className="mt-4 p-2.5 rounded-lg border border-[#FACC15]/40 bg-[#FACC15]/10 text-[11px] text-[#FACC15] flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
               <strong className="block font-semibold">Nota de conexión:</strong>
@@ -127,9 +127,9 @@ export const AuthModal: React.FC = () => {
           </div>
         )}
 
-        <p className="text-[10px] text-[#64748B] text-center mt-3">
+        <p className="text-[10px] text-[#64748B] text-center mt-4">
           {isSupabaseConfigured
-            ? 'Conectado a proyecto Supabase oficial.'
+            ? 'Conectado a proyecto Supabase oficial (srmqezzrjpvyrjkqjpve.supabase.co).'
             : 'Sesión guardada en almacenamiento local.'}
         </p>
       </div>

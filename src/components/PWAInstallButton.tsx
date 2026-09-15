@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Smartphone, Laptop, X, CheckCircle2 } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import logoWinProgol from '../assets/images/regenerated_image_1789352960422.jpg';
 
 export const PWAInstallButton: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
@@ -17,7 +18,7 @@ export const PWAInstallButton: React.FC = () => {
       <button
         onClick={install}
         className="flex items-center gap-1.5 rounded-lg bg-[#10B981] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-xs animate-pulse"
-        title="Instalar WinProgol como aplicación nativa"
+        title="Instalar WinProgol Reductoras como aplicación nativa"
       >
         <Download className="w-3.5 h-3.5" />
         <span>Instalar App</span>
@@ -31,7 +32,7 @@ export const PWAInstallButton: React.FC = () => {
       <button
         onClick={() => setShowGuide(true)}
         className="flex items-center gap-1.5 rounded-lg border border-[#334155] bg-[#161F30] px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-[#F8FAFC] hover:border-[#10B981] hover:bg-[#1E293B] transition cursor-pointer shadow-xs"
-        title="Instalar WinProgol en tu celular o computadora"
+        title="Instalar WinProgol Reductoras en tu celular o computadora"
       >
         <Download className="w-3.5 h-3.5 text-[#10B981]" />
         <span className="hidden xs:inline">Instalar App</span>
@@ -41,13 +42,18 @@ export const PWAInstallButton: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl border border-[#334155] bg-[#161F30] p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#334155] pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0F172A] border border-[#334155] text-[#10B981]">
-                  <Download className="w-5 h-5" />
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0F172A] border border-[#334155] overflow-hidden shadow-xs shrink-0">
+                  <img
+                    src={logoWinProgol}
+                    alt="WinProgol Reductoras"
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#F8FAFC]">Instalar WinProgol App</h3>
-                  <p className="text-[11px] text-[#94A3B8]">Úsala sin conexión como app nativa</p>
+                  <h3 className="text-base font-bold text-[#F8FAFC]">WinProgol Reductoras</h3>
+                  <p className="text-[11px] text-[#94A3B8]">Instalar aplicación en tu dispositivo</p>
                 </div>
               </div>
               <button
@@ -93,7 +99,7 @@ export const PWAInstallButton: React.FC = () => {
                       <span>En Computadora (Chrome / Edge)</span>
                     </div>
                     <p className="leading-relaxed">
-                      Haz clic en el icono de <strong className="text-[#3B82F6]">Instalar ⊕</strong> en la barra de direcciones (al lado de la estrella de favoritos) o en el menú de 3 puntos &gt; <strong className="text-[#F8FAFC]">«Instalar WinProgol»</strong>.
+                      Haz clic en el icono de <strong className="text-[#3B82F6]">Instalar ⊕</strong> en la barra de direcciones (al lado de la estrella de favoritos) o en el menú de 3 puntos &gt; <strong className="text-[#F8FAFC]">«Instalar WinProgol Reductoras»</strong>.
                     </p>
                   </div>
                 </div>
@@ -101,7 +107,7 @@ export const PWAInstallButton: React.FC = () => {
 
               <div className="flex items-center gap-2 text-[11px] text-[#10B981] bg-[#10B981]/10 border border-[#10B981]/30 rounded-lg p-2.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Funciona sin conexión a internet y se abre a pantalla completa sin barra de navegador.</span>
+                <span>Funciona sin conexión a internet y se abre a pantalla completa como app nativa.</span>
               </div>
             </div>
 

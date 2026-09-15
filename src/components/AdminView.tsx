@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert,
   Search,
@@ -14,6 +14,8 @@ import {
   Coins,
   Power,
   Trash2,
+  Loader2,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Concurso, Partido, Suscripcion, CodigoPromocional } from '../types';
@@ -35,6 +37,8 @@ export const AdminView: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'quiniela' | 'suscripciones' | 'codigos'>('quiniela');
+  const [guardando, setGuardando] = useState<boolean>(false);
+  const [creandoCodigo, setCreandoCodigo] = useState<boolean>(false);
 
   // Cargar Quiniela State
   const [numConcurso, setNumConcurso] = useState(concurso.numeroConcurso);
@@ -42,6 +46,16 @@ export const AdminView: React.FC = () => {
   const [bolsaConcurso, setBolsaConcurso] = useState(concurso.bolsa || '5 Millones');
   const [fechaCierre, setFechaCierre] = useState(concurso.fechaCierre);
   const [partidosEdit, setPartidosEdit] = useState<Partido[]>(concurso.partidos);
+
+  // Sincronizar campos del formulario si concurso se actualiza desde Supabase
+  useEffect(() => {
+    setNumConcurso(concurso.numeroConcurso);
+    setNombreConcurso(concurso.nombre);
+    setBolsaConcurso(concurso.bolsa || '5 Millones');
+    setFechaCierre(concurso.fechaCierre);
+    setPartidosEdit(concurso.partidos);
+    setCodigoConcursoNum(concurso.numeroConcurso);
+  }, [concurso]);
 
   // Gestor Suscripciones State
   const [busquedaUsuario, setBusquedaUsuario] = useState('');
@@ -65,34 +79,44 @@ export const AdminView: React.FC = () => {
     });
   };
 
-  const handleGuardarQuiniela = (e: React.FormEvent) => {
+  const handleGuardarQuiniela = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nuevo: Concurso = {
-      ...concurso,
-      numeroConcurso: Number(numConcurso),
-      nombre: nombreConcurso,
-      bolsa: bolsaConcurso.trim() || '5 Millones',
-      fechaCierre,
-      partidos: partidosEdit,
-    };
-    actualizarConcurso(nuevo);
+    setGuardando(true);
+    try {
+      const nuevo: Concurso = {
+        ...concurso,
+        numeroConcurso: Number(numConcurso),
+        nombre: nombreConcurso,
+        bolsa: bolsaConcurso.trim() || '5 Millones',
+        fechaCierre,
+        partidos: partidosEdit,
+      };
+      await actualizarConcurso(nuevo);
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleCrearCodigo = (e: React.FormEvent) => {
+  const handleCrearCodigo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoCodigoStr.trim()) {
       mostrarToast('Ingresa un texto para el código', 'error');
       return;
     }
-    crearNuevoCodigo({
-      codigo: nuevoCodigoStr.trim().toUpperCase(),
-      concursoNumero: Number(codigoConcursoNum),
-      usosMaximos: Number(usosMax),
-      activo: true,
-      descripcion: descCodigo,
-      creadoPor: currentUser?.nombre || 'Admin',
-    });
-    setNuevoCodigoStr('');
+    setCreandoCodigo(true);
+    try {
+      await crearNuevoCodigo({
+        codigo: nuevoCodigoStr.trim().toUpperCase(),
+        concursoNumero: Number(codigoConcursoNum),
+        usosMaximos: Number(usosMax),
+        activo: true,
+        descripcion: descCodigo,
+        creadoPor: currentUser?.nombre || 'Admin',
+      });
+      setNuevoCodigoStr('');
+    } finally {
+      setCreandoCodigo(false);
+    }
   };
 
   // Filter users for Gestor de Suscripciones
@@ -301,10 +325,20 @@ export const AdminView: React.FC = () => {
             <div className="pt-4 flex justify-end">
               <button
                 type="submit"
-                className="flex items-center gap-2 rounded-xl bg-[#10B981] px-6 py-3 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-md"
+                disabled={guardando}
+                className="flex items-center gap-2 rounded-xl bg-[#10B981] px-6 py-3 text-xs font-bold text-white hover:bg-[#059669] transition cursor-pointer shadow-md disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                <span>Guardar y Publicar Quiniela Oficial</span>
+                {guardando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Guardando en Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Guardar y Publicar Quiniela Oficial</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -350,12 +384,12 @@ export const AdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#334155]/60 bg-[#161F30]">
-                {usuariosFiltrados.map((u) => {
+                {usuariosFiltrados.map((u, idx) => {
                   const sub = suscripciones.find((s) => s.usuarioId === u.id || s.usuarioEmail === u.email);
                   const isActiva = sub?.estado === 'activa' && new Date(sub.fechaFin) > new Date();
 
                   return (
-                    <tr key={u.id} className="hover:bg-[#1E293B]/60">
+                    <tr key={`${u.id || 'usr'}-${u.email || idx}`} className="hover:bg-[#1E293B]/60">
                       <td className="p-3">
                         <div className="font-bold text-[#F8FAFC]">{u.nombre}</div>
                         <div className="text-[11px] font-mono text-[#94A3B8]">{u.email}</div>

@@ -11,12 +11,20 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
+        includeAssets: [
+          'favicon.ico',
+          'favicon.png',
+          'apple-touch-icon.png',
+          'icon.svg',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'pwa-maskable-512x512.png',
+        ],
         manifest: {
           id: '/',
-          name: 'WinProgol Reducidas',
+          name: 'WinProgol Reductoras',
           short_name: 'WinProgol',
-          description: 'Generador de quinielas reducidas de Progol con matrices matemáticas.',
+          description: 'Generador de quinielas reducidas de Progol con matrices matemáticas optimizadas.',
           theme_color: '#0B0F19',
           background_color: '#0B0F19',
           display: 'standalone',
@@ -45,7 +53,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,jpg,jpeg}'],
         },
         devOptions: {
           enabled: true,

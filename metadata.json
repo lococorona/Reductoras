@@ -1,6 +1,6 @@
 {
-  "name": "WinProgol Reducidas",
-  "description": "Aplicación PWA para generar quinielas reducidas de Progol (7 Dobles y 3 Dobles con 3 Triples), gestión de suscripciones y códigos promocionales.",
+  "name": "WinProgol Reductoras",
+  "description": "Aplicación Web Progresiva (PWA) para generar quinielas reducidas de Progol (7 Dobles y 3 Dobles con 3 Triples), gestión de suscripciones y pronósticos deportivos.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

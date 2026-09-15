@@ -37,7 +37,7 @@ export const Navbar: React.FC = () => {
                 WINPROGOL
               </span>
               <span className="rounded bg-[#10B981]/20 border border-[#10B981]/40 px-1.5 py-0.2 text-[10px] font-bold text-[#10B981]">
-                REDUCIDAS
+                REDUCTORAS
               </span>
             </div>
             <p className="text-[11px] font-medium text-[#94A3B8] flex items-center gap-1.5">
@@ -86,30 +86,17 @@ export const Navbar: React.FC = () => {
             <span>Mi Historial</span>
           </button>
           {currentUser?.rol === 'admin' && (
-            <>
-              <button
-                onClick={() => setCurrentView('admin')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-                  currentView === 'admin'
-                    ? 'bg-[#1E293B] text-[#F8FAFC] shadow-xs'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]/50'
-                }`}
-              >
-                <Settings className="w-3.5 h-3.5 text-[#3B82F6]" />
-                <span>Admin</span>
-              </button>
-              <button
-                onClick={() => setCurrentView('sql-schema')}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-                  currentView === 'sql-schema'
-                    ? 'bg-[#1E293B] text-[#F8FAFC] shadow-xs'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]/50'
-                }`}
-              >
-                <Database className="w-3.5 h-3.5 text-[#10B981]" />
-                <span>Tablas Supabase</span>
-              </button>
-            </>
+            <button
+              onClick={() => setCurrentView('admin')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                currentView === 'admin'
+                  ? 'bg-[#1E293B] text-[#F8FAFC] shadow-xs'
+                  : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#1E293B]/50'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5 text-[#3B82F6]" />
+              <span>Admin</span>
+            </button>
           )}
         </nav>
 
@@ -119,33 +106,28 @@ export const Navbar: React.FC = () => {
 
           {currentUser ? (
             <div className="flex items-center gap-2">
-              {/* Subscription Pill */}
-              <div
-                className={`hidden sm:flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold border ${
-                  currentUser.rol === 'admin'
-                    ? 'border-[#3B82F6]/40 bg-[#3B82F6]/15 text-[#3B82F6]'
-                    : tieneSuscripcionActiva
-                    ? 'border-[#10B981]/40 bg-[#10B981]/15 text-[#10B981]'
-                    : 'border-[#FACC15]/40 bg-[#FACC15]/10 text-[#FACC15]'
-                }`}
-              >
-                {currentUser.rol === 'admin' ? (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 text-[#3B82F6]" />
-                    <span>Acceso Admin Total</span>
-                  </>
-                ) : tieneSuscripcionActiva ? (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 text-[#10B981]" />
-                    <span>Plan Activo ($100 MXN)</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-3 h-3 text-[#FACC15]" />
-                    <span>Sin Suscripción</span>
-                  </>
-                )}
-              </div>
+              {/* Subscription Pill (Only for non-admin) */}
+              {currentUser.rol !== 'admin' && (
+                <div
+                  className={`hidden sm:flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold border ${
+                    tieneSuscripcionActiva
+                      ? 'border-[#10B981]/40 bg-[#10B981]/15 text-[#10B981]'
+                      : 'border-[#FACC15]/40 bg-[#FACC15]/10 text-[#FACC15]'
+                  }`}
+                >
+                  {tieneSuscripcionActiva ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-[#10B981]" />
+                      <span>Plan Activo ($100 MXN)</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-3 h-3 text-[#FACC15]" />
+                      <span>Sin Suscripción</span>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* User Avatar & Dropdown */}
               <div
@@ -218,24 +200,14 @@ export const Navbar: React.FC = () => {
           Mi Historial
         </button>
         {currentUser?.rol === 'admin' && (
-          <>
-            <button
-              onClick={() => setCurrentView('admin')}
-              className={`whitespace-nowrap px-3 py-1 text-xs font-semibold rounded-md ${
-                currentView === 'admin' ? 'bg-[#1E293B] text-[#F8FAFC]' : 'text-[#94A3B8]'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setCurrentView('sql-schema')}
-              className={`whitespace-nowrap px-3 py-1 text-xs font-semibold rounded-md ${
-                currentView === 'sql-schema' ? 'bg-[#1E293B] text-[#F8FAFC]' : 'text-[#94A3B8]'
-              }`}
-            >
-              Esquema SQL
-            </button>
-          </>
+          <button
+            onClick={() => setCurrentView('admin')}
+            className={`whitespace-nowrap px-3 py-1 text-xs font-semibold rounded-md ${
+              currentView === 'admin' ? 'bg-[#1E293B] text-[#F8FAFC]' : 'text-[#94A3B8]'
+            }`}
+          >
+            Admin
+          </button>
         )}
       </div>
     </header>

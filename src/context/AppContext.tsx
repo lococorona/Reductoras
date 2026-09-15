@@ -77,8 +77,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 4000);
   }, []);
 
-  // Listen to Supabase auth events if connected
+  // Listen to Supabase auth events, realtime updates and sync remote data if connected
   useEffect(() => {
+    const sincronizarConcursoYCodigos = () => {
+      // Sincronizar concurso más reciente desde Supabase (para móvil, incógnito y cualquier visitante)
+      SupabaseService.cargarConcursoActivoRemoto().then((concursoRemoto) => {
+        if (concursoRemoto) {
+          setConcurso(concursoRemoto);
+        }
+      });
+
+      // Sincronizar códigos promocionales desde Supabase
+      SupabaseService.cargarCodigosRemotos().then((codigosRemotos) => {
+        if (codigosRemotos && codigosRemotos.length > 0) {
+          setCodigos(codigosRemotos);
+        }
+      });
+
+      // Sincronizar usuarios y suscripciones desde Supabase
+      SupabaseService.cargarUsuariosRemotos();
+      SupabaseService.cargarSuscripcionesRemotas().then((subsRemotas) => {
+        if (subsRemotas && subsRemotas.length > 0) {
+          setSuscripciones(subsRemotas);
+        }
+      });
+    };
+
+    // Sincronización inicial
+    sincronizarConcursoYCodigos();
+
+    // Sincronizar cuando el usuario abre o vuelve a la pestaña en su móvil o navegador
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sincronizarConcursoYCodigos();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', sincronizarConcursoYCodigos);
+
+    // Escuchar cambios en TIEMPO REAL desde Supabase para la tabla concursos
+    let realtimeChannel: any = null;
+    if (supabase) {
+      realtimeChannel = supabase
+        .channel('schema-db-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'concursos' },
+          () => {
+            sincronizarConcursoYCodigos();
+          }
+        )
+        .subscribe();
+    }
+
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
@@ -92,6 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fechaRegistro: session.user.created_at || new Date().toISOString(),
           };
           setCurrentUser(user);
+          SupabaseService.sincronizarUsuarioRemoto(user);
         }
       });
 
@@ -107,15 +159,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fechaRegistro: session.user.created_at || new Date().toISOString(),
           };
           setCurrentUser(user);
+          SupabaseService.sincronizarUsuarioRemoto(user);
         } else {
           setCurrentUser(null);
         }
       });
 
       return () => {
+        window.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', sincronizarConcursoYCodigos);
+        if (realtimeChannel) {
+          supabase.removeChannel(realtimeChannel);
+        }
         authListener.subscription.unsubscribe();
       };
     }
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', sincronizarConcursoYCodigos);
+    };
   }, []);
 
   const recargarHistorial = useCallback(() => {
@@ -138,12 +201,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? currentUser.rol === 'admin' || tieneSuscripcionActiva || SupabaseService.tieneAccesoPorCodigo(currentUser.id, concurso.numeroConcurso)
     : false;
 
-  const loginConCorreo = (email: string, nombre?: string) => {
-    const user = SupabaseService.loginWithEmail(email, nombre);
+  const loginConCorreo = async (email: string, nombre?: string) => {
+    const user = await SupabaseService.loginWithEmail(email, nombre);
     setCurrentUser(user);
     setAuthModalOpen(false);
     recargarHistorial();
-    mostrarToast(`¡Bienvenido ${user.nombre}!`, 'success');
+    mostrarToast(`¡Bienvenido ${user.nombre}! Sesión sincronizada`, 'success');
   };
 
   const iniciarLoginGoogle = async () => {
@@ -259,10 +322,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const actualizarConcurso = (nuevoConcurso: Concurso) => {
-    SupabaseService.guardarConcurso(nuevoConcurso);
+  const actualizarConcurso = async (nuevoConcurso: Concurso) => {
     setConcurso(nuevoConcurso);
-    mostrarToast(`Concurso No. ${nuevoConcurso.numeroConcurso} actualizado`, 'success');
+    const res = await SupabaseService.guardarConcurso(nuevoConcurso);
+    if (res.success) {
+      mostrarToast(`¡Concurso No. ${nuevoConcurso.numeroConcurso} guardado y sincronizado en la nube!`, 'success');
+    } else {
+      mostrarToast(`Guardado en este navegador. Nota de Supabase: ${res.error || 'Configurar políticas RLS'}`, 'info');
+    }
   };
 
   const aprobarSuscripcionUsuario = (usuarioId: string, email: string, nombre: string) => {
@@ -271,20 +338,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mostrarToast(`Suscripción de 30 días activada para ${email}`, 'success');
   };
 
-  const crearNuevoCodigo = (codigoData: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>) => {
-    SupabaseService.crearCodigo(codigoData);
+  const crearNuevoCodigo = async (codigoData: Omit<CodigoPromocional, 'id' | 'usosActuales' | 'fechaCreacion'>) => {
+    await SupabaseService.crearCodigo(codigoData);
     setCodigos(SupabaseService.getCodigos());
-    mostrarToast(`Código ${codigoData.codigo} creado para concurso ${codigoData.concursoNumero}`, 'success');
+    mostrarToast(`Código ${codigoData.codigo} guardado y disponible para concurso ${codigoData.concursoNumero}`, 'success');
   };
 
-  const alternarEstadoCodigo = (id: string) => {
-    const nuevoEstado = SupabaseService.alternarEstadoCodigo(id);
+  const alternarEstadoCodigo = async (id: string) => {
+    const nuevoEstado = await SupabaseService.alternarEstadoCodigo(id);
     setCodigos(SupabaseService.getCodigos());
     mostrarToast(`El código ahora está ${nuevoEstado ? 'Activo' : 'Desactivado'}`, 'info');
   };
 
-  const eliminarCodigo = (id: string) => {
-    SupabaseService.eliminarCodigo(id);
+  const eliminarCodigo = async (id: string) => {
+    await SupabaseService.eliminarCodigo(id);
     setCodigos(SupabaseService.getCodigos());
     mostrarToast('Código eliminado del sistema', 'info');
   };

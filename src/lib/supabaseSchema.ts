@@ -13,190 +13,97 @@
  */
 
 export const SUPABASE_SQL_SCHEMA = `-- ==========================================================
--- ESTRUCTURA DE TABLAS SUPABASE - WINPROGOL REDUCIDAS
+-- ESTRUCTURA DEFINITIVA DE TABLAS SUPABASE - WINPROGOL REDUCIDAS
 -- ==========================================================
 
--- Habilitar extensión para UUIDs
+-- 1. Habilitar extensiones
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- ----------------------------------------------------------
--- 1. TABLA: public.usuarios
--- Extiende la información del usuario autenticado en auth.users
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.usuarios (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT NOT NULL UNIQUE,
-    nombre TEXT NOT NULL,
-    avatar_url TEXT,
-    rol TEXT NOT NULL DEFAULT 'user' CHECK (rol IN ('user', 'admin')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- 2. Eliminar restricciones de clave foránea y check constraints restrictivas
+ALTER TABLE public.usuarios DROP CONSTRAINT IF EXISTS usuarios_id_fkey;
+ALTER TABLE public.suscripciones DROP CONSTRAINT IF EXISTS suscripciones_usuario_id_fkey;
+ALTER TABLE public.suscripciones DROP CONSTRAINT IF EXISTS suscripciones_metodo_pago_check;
+ALTER TABLE public.suscripciones DROP CONSTRAINT IF EXISTS suscripciones_estado_check;
+ALTER TABLE public.suscripciones ALTER COLUMN usuario_id DROP NOT NULL;
 
--- Trigger para sincronizar automáticamente usuarios desde auth.users (Google Sign-In)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.usuarios (id, email, nombre, avatar_url, rol)
-  VALUES (
-    new.id,
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture', ''),
-    CASE WHEN new.email IN ('pegasocorona@gmail.com', 'admin@winprogol.com') THEN 'admin' ELSE 'user' END
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    nombre = EXCLUDED.nombre,
-    avatar_url = EXCLUDED.avatar_url,
-    updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 3. Asegurar columnas en public.usuarios
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS nombre TEXT DEFAULT 'Usuario Progol';
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS rol TEXT DEFAULT 'user';
+ALTER TABLE public.usuarios ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT OR UPDATE ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- 4. Asegurar columnas en public.suscripciones
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS usuario_id UUID;
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS usuario_email TEXT;
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS usuario_nombre TEXT;
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS monto NUMERIC(10, 2) DEFAULT 100.00;
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activa';
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS fecha_inicio TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS fecha_fin TIMESTAMP WITH TIME ZONE DEFAULT (now() + interval '30 days');
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS metodo_pago TEXT DEFAULT 'Transferencia';
+ALTER TABLE public.suscripciones ADD COLUMN IF NOT EXISTS referencia_pago TEXT;
+ALTER TABLE public.suscripciones ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
--- ----------------------------------------------------------
--- 2. TABLA: public.concursos
--- Almacena las quinielas oficiales de Progol (14 partidos)
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.concursos (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    numero_concurso INTEGER NOT NULL UNIQUE,
-    nombre TEXT NOT NULL,
-    fecha_cierre TIMESTAMP WITH TIME ZONE NOT NULL,
-    activo BOOLEAN NOT NULL DEFAULT true,
-    partidos JSONB NOT NULL, -- Array con los 14 partidos [{numero, local, visita, liga, horario, probL, probE, probV}]
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- 5. Dar permisos y configurar Row Level Security (RLS)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
 
-CREATE INDEX IF NOT EXISTS idx_concursos_numero ON public.concursos(numero_concurso);
-CREATE INDEX IF NOT EXISTS idx_concursos_activo ON public.concursos(activo);
-
--- ----------------------------------------------------------
--- 3. TABLA: public.suscripciones
--- Control de suscripciones mensuales ($100 MXN)
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.suscripciones (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    usuario_id UUID NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,
-    usuario_email TEXT NOT NULL,
-    monto NUMERIC(10, 2) NOT NULL DEFAULT 100.00,
-    estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('activa', 'pendiente', 'vencida')),
-    fecha_inicio TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    fecha_fin TIMESTAMP WITH TIME ZONE NOT NULL,
-    metodo_pago TEXT NOT NULL DEFAULT 'Transferencia' CHECK (metodo_pago IN ('Transferencia', 'OXXO', 'Admin', 'Manual')),
-    referencia_pago TEXT,
-    aprobado_por UUID REFERENCES public.usuarios(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_suscripciones_usuario ON public.suscripciones(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_suscripciones_estado ON public.suscripciones(estado, fecha_fin);
-
--- ----------------------------------------------------------
--- 4. TABLA: public.codigos_promocionales
--- Claves de YouTube o códigos promocionales exclusivos por concurso
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.codigos_promocionales (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    codigo TEXT NOT NULL UNIQUE,
-    concurso_numero INTEGER NOT NULL,
-    usos_maximos INTEGER NOT NULL DEFAULT 100,
-    usos_actuales INTEGER NOT NULL DEFAULT 0,
-    activo BOOLEAN NOT NULL DEFAULT true,
-    descripcion TEXT,
-    created_by UUID REFERENCES public.usuarios(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    CONSTRAINT check_usos CHECK (usos_actuales <= usos_maximos)
-);
-
-CREATE INDEX IF NOT EXISTS idx_codigos_concurso ON public.codigos_promocionales(concurso_numero, codigo);
-
--- ----------------------------------------------------------
--- 5. TABLA: public.codigos_canjeados
--- Registra qué usuario ya canjeó qué código para un concurso
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.codigos_canjeados (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    usuario_id UUID NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,
-    codigo_id UUID NOT NULL REFERENCES public.codigos_promocionales(id) ON DELETE CASCADE,
-    concurso_numero INTEGER NOT NULL,
-    codigo TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    UNIQUE(usuario_id, concurso_numero)
-);
-
--- ----------------------------------------------------------
--- 6. TABLA: public.quinielas_generadas
--- Historial de reducidas generadas por usuario
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.quinielas_generadas (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    usuario_id UUID NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,
-    usuario_email TEXT NOT NULL,
-    concurso_numero INTEGER NOT NULL,
-    tipo_reductora TEXT NOT NULL CHECK (tipo_reductora IN ('7D', '3D3T')),
-    total_combinaciones INTEGER NOT NULL,
-    base_pronosticos JSONB NOT NULL, -- Selección base del usuario (L, E, V por cada casillero)
-    combinaciones JSONB NOT NULL, -- Array de quinielas [{numero: 1, etiqueta: 'Q01', pronosticos: ['L','E',...]}]
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_quinielas_usuario ON public.quinielas_generadas(usuario_id, concurso_numero);
-CREATE INDEX IF NOT EXISTS idx_quinielas_fecha ON public.quinielas_generadas(created_at DESC);
-
--- ----------------------------------------------------------
--- 7. POLÍTICAS DE SEGURIDAD ROW LEVEL SECURITY (RLS)
--- ----------------------------------------------------------
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.concursos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suscripciones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.codigos_promocionales ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.codigos_canjeados ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.quinielas_generadas ENABLE ROW LEVEL SECURITY;
 
--- Lectura pública para concursos activos
-CREATE POLICY "Concursos visibles para todos" ON public.concursos
-    FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Permitir lectura perfiles" ON public.usuarios;
+CREATE POLICY "Permitir lectura perfiles" ON public.usuarios FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Permitir guardar perfiles" ON public.usuarios;
+CREATE POLICY "Permitir guardar perfiles" ON public.usuarios FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Permitir actualizar perfiles" ON public.usuarios;
+CREATE POLICY "Permitir actualizar perfiles" ON public.usuarios FOR UPDATE USING (true);
 
--- Usuarios: sólo ver y actualizar su propio perfil (o admin)
-CREATE POLICY "Usuarios ven su propio perfil" ON public.usuarios
-    FOR SELECT USING (auth.uid() = id OR EXISTS (
-        SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'
-    ));
+DROP POLICY IF EXISTS "Suscripciones acceso total" ON public.suscripciones;
+CREATE POLICY "Suscripciones acceso total" ON public.suscripciones FOR ALL USING (true);
 
-CREATE POLICY "Usuarios editan su propio perfil" ON public.usuarios
-    FOR UPDATE USING (auth.uid() = id);
+-- 6. Insertar / Actualizar Administrador y vincular su ID en Suscripciones
+DO $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  -- Insertar o actualizar usuario
+  INSERT INTO public.usuarios (email, nombre, avatar_url, rol)
+  VALUES (
+      'pegasocorona@gmail.com',
+      'Administrador WinProgol',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      'admin'
+  )
+  ON CONFLICT (email) DO UPDATE SET
+      rol = 'admin',
+      nombre = 'Administrador WinProgol'
+  RETURNING id INTO v_user_id;
 
--- Suscripciones: usuarios ven la suya; administradores ven y editan todas
-CREATE POLICY "Usuarios ven sus suscripciones" ON public.suscripciones
-    FOR SELECT USING (auth.uid() = usuario_id OR EXISTS (
-        SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'
-    ));
+  -- Eliminar suscripciones previas si existieran para este email para evitar duplicados
+  DELETE FROM public.suscripciones WHERE usuario_email = 'pegasocorona@gmail.com';
 
-CREATE POLICY "Admins gestionan suscripciones" ON public.suscripciones
-    FOR ALL USING (EXISTS (
-        SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'
-    ));
+  -- Insertar suscripción de Administrador con método válido y compatible
+  INSERT INTO public.suscripciones (
+      usuario_id, 
+      usuario_email, 
+      usuario_nombre, 
+      monto, 
+      estado, 
+      fecha_fin, 
+      metodo_pago, 
+      referencia_pago
+  )
+  VALUES (
+      v_user_id,
+      'pegasocorona@gmail.com',
+      'Administrador WinProgol',
+      100.00,
+      'activa',
+      '2030-12-31 23:59:59+00',
+      'Transferencia',
+      'Acceso Administrador Sistema Vitalicio'
+  );
+END $$;
 
--- Quinielas generadas: usuarios sólo ven y crean las suyas
-CREATE POLICY "Usuarios ven sus quinielas" ON public.quinielas_generadas
-    FOR SELECT USING (auth.uid() = usuario_id);
-
-CREATE POLICY "Usuarios guardan sus quinielas" ON public.quinielas_generadas
-    FOR INSERT WITH CHECK (auth.uid() = usuario_id);
-
--- Códigos: cualquiera autenticado puede validar; sólo admins gestionan
-CREATE POLICY "Ver códigos activos" ON public.codigos_promocionales
-    FOR SELECT USING (activo = true);
-
-CREATE POLICY "Admins gestionan códigos" ON public.codigos_promocionales
-    FOR ALL USING (EXISTS (
-        SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'admin'
-    ));
 `;

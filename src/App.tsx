@@ -60,7 +60,7 @@ const MainContent: React.FC = () => {
                 referrerPolicy="no-referrer"
               />
             </div>
-            <span className="font-bold text-[#F8FAFC]">WinProgol Reducidas</span>
+            <span className="font-bold text-[#F8FAFC]">WinProgol Reductoras</span>
             <span className="text-[#64748B]">•</span>
             <span className="text-[11px] text-[#64748B]">
               Algoritmos Matemáticos Puros (Sin Inteligencia Artificial)
